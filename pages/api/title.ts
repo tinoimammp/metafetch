@@ -126,7 +126,8 @@ function isProtectionChallengePage(headers: Headers, buffer: Buffer): boolean {
 
 	const sample = buffer.subarray(0, 4096).toString('latin1').toLowerCase()
 	return (
-		sample.includes('checking your browser before accessing') || // Cloudflare
+		sample.includes('checking your browser before accessing') || // Cloudflare JS challenge
+		sample.includes('attention required! | cloudflare') || // Cloudflare CAPTCHA/block
 		sample.includes('cf-chl-') ||
 		sample.includes('cf_chl_opt') ||
 		sample.includes('/cdn-cgi/challenge-platform/') ||
@@ -323,18 +324,15 @@ async function fetchOnce(
 	const arrayBuffer = await response.arrayBuffer()
 	const buffer = Buffer.from(arrayBuffer).subarray(0, MAX_BODY_BYTES)
 
-	if (isChallengeStatus) {
-		return { buffer, contentType, finalUrl, blocked: isProtectionChallengePage(response.headers, buffer) }
-	}
+	const blocked = isProtectionChallengePage(response.headers, buffer)
 
-	if (!response.ok) {
-		// non-challenge error already handled above; defensive
+	if (isChallengeStatus && !blocked) {
 		throw Object.assign(new Error(`upstream status ${response.status}`), {
 			upstreamStatus: response.status,
 		})
 	}
 
-	return { buffer, contentType, finalUrl, blocked: false }
+	return { buffer, contentType, finalUrl, blocked }
 }
 
 const MAX_ATTEMPTS = 3
